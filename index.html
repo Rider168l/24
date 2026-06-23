@@ -1,0 +1,342 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>I Love Mulan 💖</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body { background: #000; overflow: hidden; font-family: 'Helvetica Neue', sans-serif; }
+
+  #canvas3d {
+    position: fixed; inset: 0; width: 100%; height: 100%;
+  }
+
+  #camview {
+    position: fixed; bottom: 16px; right: 16px;
+    width: 180px; height: 135px;
+    border-radius: 10px;
+    border: 1px solid rgba(255,255,255,0.15);
+    object-fit: cover;
+    transform: scaleX(-1);
+    display: none;
+    z-index: 10;
+  }
+
+  #hud {
+    position: fixed; top: 16px; left: 16px;
+    background: rgba(0,0,0,0.6);
+    border: 1px solid rgba(255,255,255,0.12);
+    border-radius: 10px;
+    padding: 10px 16px;
+    color: #fff;
+    z-index: 10;
+    backdrop-filter: blur(6px);
+    display: none;
+  }
+  #hud-mode { font-size: 14px; font-weight: 600; color: #f9a8d4; margin-bottom: 4px; }
+  #hud-hint { font-size: 11px; color: rgba(255,255,255,0.45); line-height: 1.6; }
+
+  /* Start screen */
+  #startscreen {
+    position: fixed; inset: 0;
+    display: flex; flex-direction: column;
+    align-items: center; justify-content: center;
+    background: #000;
+    z-index: 20;
+  }
+  .heart-icon { font-size: 64px; margin-bottom: 20px; animation: pulse 1.8s ease-in-out infinite; }
+  @keyframes pulse { 0%,100%{transform:scale(1)} 50%{transform:scale(1.12)} }
+  .title { font-size: 28px; font-weight: 700; color: #f9a8d4; letter-spacing: 0.05em; margin-bottom: 8px; }
+  .subtitle { font-size: 14px; color: rgba(255,255,255,0.4); margin-bottom: 36px; text-align: center; line-height: 1.6; }
+  .guide {
+    display: flex; gap: 24px; margin-bottom: 36px;
+  }
+  .guide-item {
+    display: flex; flex-direction: column; align-items: center; gap: 8px;
+    background: rgba(255,255,255,0.05);
+    border: 1px solid rgba(255,255,255,0.1);
+    border-radius: 12px;
+    padding: 16px 20px;
+    min-width: 120px;
+  }
+  .guide-emoji { font-size: 32px; }
+  .guide-label { font-size: 12px; color: rgba(255,255,255,0.6); text-align: center; line-height: 1.4; }
+  .guide-result { font-size: 12px; color: #f472b6; font-weight: 600; text-align: center; }
+
+  #startbtn {
+    background: linear-gradient(135deg, #be185d, #9d174d);
+    color: #fff; border: none; border-radius: 10px;
+    padding: 14px 36px; font-size: 16px; font-weight: 600;
+    cursor: pointer; letter-spacing: 0.03em;
+    transition: transform 0.15s, box-shadow 0.15s;
+    box-shadow: 0 4px 24px rgba(190,24,93,0.4);
+  }
+  #startbtn:hover { transform: translateY(-2px); box-shadow: 0 8px 32px rgba(190,24,93,0.5); }
+
+  #errormsg {
+    position: fixed; inset: 0; display: none;
+    flex-direction: column; align-items: center; justify-content: center;
+    background: #000; z-index: 30; color: #fff; text-align: center; padding: 32px;
+  }
+  #errormsg h2 { color: #f87171; margin-bottom: 12px; }
+  #errormsg p { color: rgba(255,255,255,0.5); line-height: 1.7; }
+</style>
+</head>
+<body>
+
+<canvas id="canvas3d"></canvas>
+<video id="camview" autoplay playsinline muted></video>
+<div id="hud">
+  <div id="hud-mode">กำลังรอมือ...</div>
+  <div id="hud-hint">✌️ Peace = I LOVE MULAN &nbsp;|&nbsp; 🖐️ 4 นิ้ว = หัวใจ</div>
+</div>
+
+<div id="startscreen">
+  <div class="heart-icon">💖</div>
+  <div class="title">I Love Mulan</div>
+  <div class="subtitle">ควบคุมอนุภาคด้วยท่ามือผ่านกล้อง<br>ไม่ต้องติดตั้งอะไร เปิดได้ทันที</div>
+  <div class="guide">
+    <div class="guide-item">
+      <div class="guide-emoji">✌️</div>
+      <div class="guide-label">ชู 2 นิ้ว<br>(Peace)</div>
+      <div class="guide-result">I LOVE MULAN</div>
+    </div>
+    <div class="guide-item">
+      <div class="guide-emoji">🖐️</div>
+      <div class="guide-label">ชู 4 นิ้ว<br>(ยกเว้นนิ้วโป้ง)</div>
+      <div class="guide-result">หัวใจ 💕</div>
+    </div>
+    <div class="guide-item">
+      <div class="guide-emoji">🌌</div>
+      <div class="guide-label">ท่าอื่นๆ<br>(default)</div>
+      <div class="guide-result">จักรวาล</div>
+    </div>
+  </div>
+  <button id="startbtn" onclick="startApp()">เปิดกล้องและเริ่ม</button>
+</div>
+
+<div id="errormsg">
+  <h2>ไม่สามารถเปิดกล้องได้</h2>
+  <p id="errtxt"></p>
+</div>
+
+<!-- Three.js -->
+<script src="https://cdn.jsdelivr.net/npm/three@0.152.2/build/three.min.js"></script>
+<!-- MediaPipe Hands -->
+<script src="https://cdn.jsdelivr.net/npm/@mediapipe/hands@0.4.1646424915/hands.js" crossorigin="anonymous"></script>
+<script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils@0.3.1640029074/camera_utils.js" crossorigin="anonymous"></script>
+
+<script>
+// ─── CONFIG ───────────────────────────────────────────────
+const NUM = 1500;
+let scene, camera, renderer, points;
+let posAttr, colAttr;
+let posSpace, posText, posHeart;
+let curPos, tgtPos;
+let mode = 0;          // 0=cosmos, 1=text, 2=heart
+let rotAngle = 0;
+let handX = 0, handY = 0;
+let tHandX = 0, tHandY = 0;
+
+// ─── BUILD PARTICLE POSITIONS ──────────────────────────────
+function buildSpace() {
+  const a = new Float32Array(NUM * 3);
+  for (let i = 0; i < NUM * 3; i++) a[i] = (Math.random() - 0.5) * 9;
+  return a;
+}
+
+function buildText() {
+  // วาดข้อความบน OffscreenCanvas
+  const W = 1400, H = 300;
+  const oc = new OffscreenCanvas(W, H);
+  const ctx = oc.getContext('2d');
+  ctx.fillStyle = '#000'; ctx.fillRect(0, 0, W, H);
+  ctx.fillStyle = '#fff';
+  ctx.font = 'bold 108px Arial Black, Arial';
+  ctx.fillText('I LOVE', 60, 118);
+  ctx.fillText('MULAN', 130, 248);
+  const img = ctx.getImageData(0, 0, W, H);
+  const pts = [];
+  for (let y = 0; y < H; y += 2)
+    for (let x = 0; x < W; x += 2)
+      if (img.data[(y * W + x) * 4] > 100)
+        pts.push([(x - W/2) / 105, -(y - H/2) / 70, (Math.random()-0.5)*0.3]);
+  const a = new Float32Array(NUM * 3);
+  for (let i = 0; i < NUM; i++) {
+    const p = pts[Math.floor(Math.random() * pts.length)];
+    a[i*3]=p[0]; a[i*3+1]=p[1]; a[i*3+2]=p[2];
+  }
+  return a;
+}
+
+function buildHeart() {
+  const a = new Float32Array(NUM * 3);
+  for (let i = 0; i < NUM; i++) {
+    const t = Math.random() * Math.PI * 2 - Math.PI;
+    const p = Math.random() * Math.PI * 2;
+    const x = 2 * Math.pow(Math.sin(t), 3);
+    const y = 2*Math.cos(t) - 0.7*Math.cos(2*t) - 0.3*Math.cos(3*t) - 0.1*Math.cos(4*t);
+    a[i*3]   = x * 0.85;
+    a[i*3+1] = y * 0.85 + 0.5;
+    a[i*3+2] = Math.sin(p) * 0.4;
+  }
+  return a;
+}
+
+// ─── INIT THREE.JS ─────────────────────────────────────────
+function initThree() {
+  const cvs = document.getElementById('canvas3d');
+  scene = new THREE.Scene();
+  camera = new THREE.PerspectiveCamera(45, innerWidth/innerHeight, 0.1, 100);
+  camera.position.z = 12;
+
+  renderer = new THREE.WebGLRenderer({ canvas: cvs, antialias: true, alpha: true });
+  renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
+  renderer.setSize(innerWidth, innerHeight);
+
+  posSpace = buildSpace();
+  posText  = buildText();
+  posHeart = buildHeart();
+
+  curPos = new Float32Array(posSpace);
+  tgtPos = posSpace;
+
+  const geo = new THREE.BufferGeometry();
+  posAttr = new THREE.BufferAttribute(new Float32Array(curPos), 3);
+  colAttr = new THREE.BufferAttribute(new Float32Array(NUM * 3).fill(0.4), 3);
+  geo.setAttribute('position', posAttr);
+  geo.setAttribute('color', colAttr);
+
+  const mat = new THREE.PointsMaterial({ size: 0.065, vertexColors: true, transparent: true, opacity: 0.9 });
+  points = new THREE.Points(geo, mat);
+  scene.add(points);
+
+  window.addEventListener('resize', () => {
+    renderer.setSize(innerWidth, innerHeight);
+    camera.aspect = innerWidth / innerHeight;
+    camera.updateProjectionMatrix();
+  });
+}
+
+function lerp(a, b, t) { return a + (b - a) * t; }
+
+function updateColors() {
+  const c = colAttr.array;
+  for (let i = 0; i < NUM; i++) {
+    if (mode === 1) {          // I LOVE MULAN — ชมพู-แดง
+      const t = Math.max(0, Math.min(1, (curPos[i*3+1] + 2) / 4));
+      c[i*3]=1.0; c[i*3+1]=0.1+0.2*t; c[i*3+2]=0.3+0.45*t;
+    } else if (mode === 2) {   // หัวใจ — ชมพูสด
+      c[i*3]=1.0; c[i*3+1]=0.12; c[i*3+2]=0.42;
+    } else {                   // cosmos — ฟ้า
+      c[i*3]=0.15; c[i*3+1]=0.45; c[i*3+2]=1.0;
+    }
+  }
+  colAttr.needsUpdate = true;
+}
+
+function animate() {
+  requestAnimationFrame(animate);
+
+  // เลือก target ตาม mode
+  if (mode === 1)      { tgtPos = posText;  rotAngle = 0; }
+  else if (mode === 2) { tgtPos = posHeart; rotAngle += 0.012; }
+  else                 { tgtPos = posSpace; rotAngle += 0.004; }
+
+  // lerp อนุภาค
+  const pa = posAttr.array;
+  for (let i = 0; i < NUM * 3; i++) curPos[i] = lerp(curPos[i], tgtPos[i], 0.1);
+  pa.set(curPos);
+  posAttr.needsUpdate = true;
+
+  updateColors();
+
+  // lerp มือ
+  handX = lerp(handX, tHandX, 0.2);
+  handY = lerp(handY, tHandY, 0.2);
+
+  points.rotation.y = rotAngle;
+  points.position.set(
+    mode > 0 ? handX * 0.25 : 0,
+    mode > 0 ? handY * 0.25 : 0,
+    0
+  );
+
+  renderer.render(scene, camera);
+}
+
+// ─── GESTURE DETECTION ─────────────────────────────────────
+function detectGesture(lm) {
+  const tips = [8,12,16,20], pips = [6,10,14,18];
+  const up = tips.map((t,i) => lm[t].y < lm[pips[i]].y);
+  if (up[0] && up[1] && !up[2] && !up[3]) return 1;  // ✌️ Peace → text
+  if (up.every(v => v))                    return 2;  // 🖐️ 4 jari → heart
+  return 0;
+}
+
+// ─── START APP ─────────────────────────────────────────────
+async function startApp() {
+  document.getElementById('startscreen').style.display = 'none';
+  document.getElementById('hud').style.display = 'block';
+
+  initThree();
+  animate();
+
+  const vid = document.getElementById('camview');
+  vid.style.display = 'block';
+
+  // labels
+  const modeLabels = {
+    0: '🌌 จักรวาล — ยกมือเพื่อเปลี่ยน',
+    1: '✌️ I LOVE MULAN',
+    2: '🖐️ หัวใจ 💕'
+  };
+  const modeColors = { 0: 'rgba(255,255,255,0.4)', 1: '#f9a8d4', 2: '#fb7185' };
+
+  // MediaPipe Hands
+  const hands = new Hands({
+    locateFile: f => `https://cdn.jsdelivr.net/npm/@mediapipe/hands@0.4.1646424915/${f}`
+  });
+  hands.setOptions({
+    maxNumHands: 1,
+    modelComplexity: 0,
+    minDetectionConfidence: 0.6,
+    minTrackingConfidence: 0.5
+  });
+  hands.onResults(res => {
+    const hudMode = document.getElementById('hud-mode');
+    if (res.multiHandLandmarks?.length) {
+      const lm = res.multiHandLandmarks[0];
+      mode = detectGesture(lm);
+      tHandX = (lm[0].x - 0.5) * 6;
+      tHandY = -(lm[0].y - 0.5) * 5;
+    } else {
+      mode = 0;
+    }
+    hudMode.textContent = modeLabels[mode];
+    hudMode.style.color = modeColors[mode];
+  });
+
+  // เปิดกล้อง
+  try {
+    const stream = await navigator.mediaDevices.getUserMedia({
+      video: { facingMode: 'user', width: 480, height: 360 }
+    });
+    vid.srcObject = stream;
+
+    const cam = new Camera(vid, {
+      onFrame: async () => { await hands.send({ image: vid }); },
+      width: 480, height: 360
+    });
+    cam.start();
+  } catch (e) {
+    const err = document.getElementById('errormsg');
+    err.style.display = 'flex';
+    document.getElementById('errtxt').textContent =
+      'กรุณาอนุญาตการเข้าถึงกล้องในเบราว์เซอร์\n(' + e.message + ')';
+  }
+}
+</script>
+</body>
+</html>
